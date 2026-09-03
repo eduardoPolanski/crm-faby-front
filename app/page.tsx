@@ -32,9 +32,12 @@ export default function Home() {
     const rows = result.data ?? [];
     const leadIds = rows.map((row) => row.lead_id);
     const leadsResult = leadIds.length ? await supabase.from('leads').select('id,name,push_name,phone_e164,temperature,stage,next_action').in('id', leadIds) : { data: [], error: null };
-    if (leadsResult.error) { setError(leadsResult.error.message); return; }
+    if (leadsResult.error) setError(leadsResult.error.message);
     const leadMap = new Map((leadsResult.data ?? []).map((lead) => [lead.id, lead]));
-    setConversations(rows.map((row) => ({ ...row, lead: leadMap.get(row.lead_id) })).filter((row) => row.lead) as unknown as Conversation[]);
+    setConversations(rows.map((row) => {
+      const fallback: Lead = { id: row.lead_id, name: null, push_name: null, phone_e164: '+' + row.remote_jid.split('@')[0], temperature: 'cold', stage: 'new', next_action: null };
+      return { ...row, lead: leadMap.get(row.lead_id) ?? fallback };
+    }) as unknown as Conversation[]);
   }
   async function loadMessages(id: string) { const { data } = await supabase.from('messages').select('id,direction,text_content,status,created_at').eq('conversation_id', id).order('created_at'); setMessages((data ?? []) as Message[]); }
   async function loadAppointments(id: string) { const { data } = await supabase.from('appointments').select('id,lead_id,scheduled_at,status,notes,lead:leads(id,name,push_name,phone_e164)').eq('owner_id', id).order('scheduled_at'); setAppointments((data ?? []) as unknown as Appointment[]); }
