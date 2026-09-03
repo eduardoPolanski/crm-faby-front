@@ -23,7 +23,10 @@ export function QrRefreshButton() {
     };
     void load();
     const channel = supabase.channel('qr-button-' + userId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_sessions', filter: 'owner_id=eq.' + userId }, (payload) => setStatus(payload.new.status))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_sessions', filter: 'owner_id=eq.' + userId }, (payload) => {
+        const row = payload.new as { status?: string };
+        setStatus(row.status ?? null);
+      })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
   }, [userId]);
