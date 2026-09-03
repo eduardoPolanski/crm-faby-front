@@ -26,7 +26,16 @@ export default function Home() {
   async function loadAll(id: string) { await Promise.all([loadSession(id), loadLeads(id), loadConversations(id), loadAppointments(id), loadFollowUps(id)]); }
   async function loadSession(id: string) { const { data } = await supabase.from('whatsapp_sessions').select('status,qr_code,phone_e164').eq('owner_id', id).eq('session_name', 'default').maybeSingle(); setSession(data); }
   async function loadLeads(id: string) { const { data } = await supabase.from('leads').select('id,name,push_name,phone_e164,temperature,stage,next_action').eq('owner_id', id).order('updated_at', { ascending: false }); setLeads((data ?? []) as Lead[]); }
-  async function loadConversations(id: string) { const { data } = await supabase.from('conversations').select('id,remote_jid,unread_count,lead:leads(id,name,push_name,phone_e164,temperature,stage,next_action)').eq('owner_id', id).order('last_message_at', { ascending: false, nullsFirst: false }); setConversations((data ?? []) as unknown as Conversation[]); }
+  async function loadConversations(id: string) {
+    const result = await supabase.from('conversations').select('id,remote_jid,unread_count,lead_id').eq('owner_id', id).order('last_message_at', { ascending: false, nullsFirst: false });
+    if (result.error) { setError(result.error.message); return; }
+    const rows = result.data ?? [];
+    const leadIds = rows.map((row) => row.lead_id);
+    const leadsResult = leadIds.length ? await supabase.from('leads').select('id,name,push_name,phone_e164,temperature,stage,next_action').in('id', leadIds) : { data: [], error: null };
+    if (leadsResult.error) { setError(leadsResult.error.message); return; }
+    const leadMap = new Map((leadsResult.data ?? []).map((lead) => [lead.id, lead]));
+    setConversations(rows.map((row) => ({ ...row, lead: leadMap.get(row.lead_id) })).filter((row) => row.lead) as unknown as Conversation[]);
+  }
   async function loadMessages(id: string) { const { data } = await supabase.from('messages').select('id,direction,text_content,status,created_at').eq('conversation_id', id).order('created_at'); setMessages((data ?? []) as Message[]); }
   async function loadAppointments(id: string) { const { data } = await supabase.from('appointments').select('id,lead_id,scheduled_at,status,notes,lead:leads(id,name,push_name,phone_e164)').eq('owner_id', id).order('scheduled_at'); setAppointments((data ?? []) as unknown as Appointment[]); }
   async function loadFollowUps(id: string) { const { data } = await supabase.from('follow_ups').select('id,lead_id,title,due_at,completed_at,lead:leads(id,name,push_name,phone_e164)').eq('owner_id', id).order('due_at'); setFollowUps((data ?? []) as unknown as FollowUp[]); }
